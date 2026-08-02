@@ -1,11 +1,1 @@
-/**
- * Secret admin registration code.
- *
- * A user can only register as an ADMIN if they know this code — it is
- * validated server-side in `users.completeProfile` (never sent to the
- * client). Change it here to your own value.
- */
-export const ADMIN_SIGNUP_CODE = "Bskbertrand7@";
-
-/** Default marketplace currency (XAF / FCFA). */
-export const DEFAULT_CURRENCY = "XAF";
+[FILE_TOO_LARGE]: The combined read_files output exceeded the 100 000 character hard limit. This file was truncated after 0 characters. Read it separately or use code_search for the relevant section.
