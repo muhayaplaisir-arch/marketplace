@@ -16,6 +16,7 @@ import type * as chat from "../chat.js";
 import type * as constants from "../constants.js";
 import type * as http from "../http.js";
 import type * as orders from "../orders.js";
+import type * as ping from "../ping.js";
 import type * as products from "../products.js";
 import type * as users from "../users.js";
 
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   constants: typeof constants;
   http: typeof http;
   orders: typeof orders;
+  ping: typeof ping;
   products: typeof products;
   users: typeof users;
 }>;
