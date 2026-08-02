@@ -13,13 +13,32 @@ import {
   MessageSquareText,
   Plus,
   ShoppingCart,
+  Sparkles,
+  Store,
 } from "lucide-react";
 import { toast } from "sonner";
+
+function fallbackImage(category: string) {
+  const emoji: Record<string, string> = {
+    Électronique: "📱",
+    Textile: "👕",
+    Alimentaire: "🥫",
+    Machines: "⚙️",
+    Beauté: "🧴",
+    Construction: "🏗️",
+    Autre: "📦",
+  };
+  return emoji[category] ?? "📦";
+}
 
 export default function ProductDetail() {
   const { productId } = useParams();
   const navigate = useNavigate();
   const product = useQuery(api.products.getProduct, { id: productId as any });
+  const similar = useQuery(
+    api.products.listMarketplaceProducts,
+    product ? { category: product.category } : "skip",
+  );
   const createOrder = useMutation(api.orders.createOrder);
   const startConversation = useMutation(api.chat.startConversation);
   const [qty, setQty] = useState(1);
@@ -31,6 +50,8 @@ export default function ProductDetail() {
   if (!product) {
     return <div className="py-24 text-center text-sm text-muted-foreground">Produit introuvable.</div>;
   }
+
+  const similarProducts = (similar ?? []).filter((p) => p._id !== product._id).slice(0, 6);
 
   const clampQty = (v: number) => Math.max(1, Math.min(product.stock, v));
 
@@ -181,6 +202,63 @@ export default function ProductDetail() {
           </div>
         </div>
       </div>
+
+      {/* similar products */}
+      {similarProducts.length > 0 && (
+        <div className="space-y-4 pt-2">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <div>
+              <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
+                $ innovax --similaires
+              </p>
+              <h2 className="mt-0.5 flex items-center gap-1.5 text-lg font-bold tracking-tight">
+                <Sparkles className="h-4 w-4 text-primary" /> Produits similaires
+              </h2>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Même catégorie · {product.category}
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {similarProducts.map((p) => (
+              <button
+                key={p._id}
+                onClick={() => navigate(`/dashboard/product/${p._id}`)}
+                className="group rounded-lg border border-border bg-card overflow-hidden text-left hover:shadow-md hover:-translate-y-0.5 transition-all"
+              >
+                <div className="relative flex h-36 items-center justify-center bg-muted/50 border-b border-border text-5xl">
+                  {p.imageUrl ? (
+                    <img
+                      src={p.imageUrl}
+                      alt={p.name}
+                      className="h-full w-full object-cover group-hover:scale-105 transition-transform"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  ) : null}
+                  <span className="absolute inset-0 flex items-center justify-center">
+                    {fallbackImage(p.category)}
+                  </span>
+                  <Badge variant="secondary" className="absolute left-2 top-2 text-[9px] bg-background/90">
+                    {p.category}
+                  </Badge>
+                </div>
+                <div className="p-3">
+                  <h3 className="text-xs font-semibold line-clamp-1">{p.name}</h3>
+                  <p className="mt-0.5 flex items-center gap-1 truncate text-[10px] text-muted-foreground">
+                    <Store className="h-3 w-3 shrink-0" /> {p.supplierName}
+                  </p>
+                  <p className="mt-2 text-sm font-bold text-primary">
+                    {formatMoney(p.price, p.currency)}
+                    <span className="ml-1 text-[10px] font-normal text-muted-foreground">/ {p.unit}</span>
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
