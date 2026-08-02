@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
 import { Button } from "@/components/ui/button";
@@ -20,11 +20,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatMoney } from "@/lib/format";
-import { Loader2, Package, Pencil, Plus, Trash2 } from "lucide-react";
+import { ImagePlus, Loader2, Package, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 const CATEGORIES = ["Électronique", "Textile", "Alimentaire", "Machines", "Beauté", "Construction", "Autre"];
 const UNITS = ["unité", "pièce", "kg", "tonne", "carton", "litre", "mètre"];
+const CURRENCIES = ["USD", "EUR", "XAF", "XOF", "GBP", "CNY", "NGN", "GHS", "MAD", "ZAR", "KES", "EGP"];
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 
 interface FormState {
   name: string;
@@ -35,6 +37,7 @@ interface FormState {
   imageUrl: string;
   stock: string;
   moq: string;
+  currency: string;
 }
 
 const emptyForm: FormState = {
@@ -46,6 +49,7 @@ const emptyForm: FormState = {
   imageUrl: "",
   stock: "",
   moq: "",
+  currency: "USD",
 };
 
 export default function SupplierProducts() {
@@ -53,15 +57,21 @@ export default function SupplierProducts() {
   const createProduct = useMutation(api.products.createProduct);
   const updateProduct = useMutation(api.products.updateProduct);
   const deleteProduct = useMutation(api.products.deleteProduct);
+  const generateUploadUrl = useMutation(api.products.generateUploadUrl);
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [busy, setBusy] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm);
+    setImageFile(null);
+    setImagePreview(null);
     setOpen(true);
   };
   const openEdit = (p: any) => {
@@ -72,24 +82,65 @@ export default function SupplierProducts() {
       category: p.category,
       price: String(p.price),
       unit: p.unit,
-      imageUrl: p.imageUrl ?? "",
+      imageUrl: p.imageStorageId ? "" : (p.imageUrl ?? ""),
       stock: String(p.stock),
       moq: p.moq ? String(p.moq) : "",
+      currency: p.currency ?? "USD",
     });
+    setImageFile(null);
+    setImagePreview(null);
     setOpen(true);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Veuillez choisir un fichier image (PNG, JPG, WebP…).");
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      toast.error("Image trop lourde — maximum 5 Mo.");
+      return;
+    }
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+    setForm((f) => ({ ...f, imageUrl: "" }));
+  };
+
+  const clearImage = () => {
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setImageFile(null);
+    setImagePreview(null);
+    setForm((f) => ({ ...f, imageUrl: "" }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     try {
+      let imageStorageId: string | undefined;
+      if (imageFile) {
+        const uploadUrl = await generateUploadUrl();
+        const res = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": imageFile.type },
+          body: imageFile,
+        });
+        if (!res.ok) throw new Error("Échec du téléversement de l'image.");
+        const data = (await res.json()) as { storageId: string };
+        imageStorageId = data.storageId;
+      }
       const payload = {
         name: form.name,
         description: form.description,
         category: form.category,
         price: Number(form.price) || 0,
         unit: form.unit,
-        imageUrl: form.imageUrl || undefined,
+        imageUrl: imageFile ? "" : form.imageUrl || undefined,
+        imageStorageId: imageStorageId as any,
+        currency: form.currency,
         stock: Number(form.stock) || 0,
         moq: form.moq ? Number(form.moq) : undefined,
       };
@@ -101,6 +152,9 @@ export default function SupplierProducts() {
         toast.success("Produit publié sur le marché.");
       }
       setOpen(false);
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
+      setImageFile(null);
+      setImagePreview(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur d'enregistrement.");
     } finally {
@@ -128,6 +182,8 @@ export default function SupplierProducts() {
 
   const set = (k: keyof FormState) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const currentImage = imagePreview ?? (form.imageUrl ? form.imageUrl : null);
 
   return (
     <div className="space-y-6">
@@ -187,7 +243,7 @@ export default function SupplierProducts() {
                   {p.moq ? ` · MOQ ${p.moq}` : ""}
                 </p>
                 <p className="mt-0.5 text-sm font-bold text-primary">
-                  {formatMoney(p.price)} <span className="text-[10px] font-normal text-muted-foreground">/ {p.unit}</span>
+                  {formatMoney(p.price, p.currency)} <span className="text-[10px] font-normal text-muted-foreground">/ {p.unit}</span>
                 </p>
               </div>
               <div className="flex items-center gap-1.5">
@@ -246,11 +302,24 @@ export default function SupplierProducts() {
                 </Select>
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label className="text-[10px] uppercase text-muted-foreground">Prix (XAF) *</Label>
+                <Label className="text-[10px] uppercase text-muted-foreground">Prix *</Label>
                 <Input type="number" min={0} value={form.price} onChange={set("price")} required className="font-mono text-sm" />
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] uppercase text-muted-foreground">Devise</Label>
+                <Select value={form.currency} onValueChange={(v) => setForm((f) => ({ ...f, currency: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((c) => (
+                      <SelectItem key={c} value={c}>{c}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="text-[10px] uppercase text-muted-foreground">Stock *</Label>
                 <Input type="number" min={0} value={form.stock} onChange={set("stock")} required className="font-mono text-sm" />
@@ -261,8 +330,56 @@ export default function SupplierProducts() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[10px] uppercase text-muted-foreground">Image (URL)</Label>
-              <Input value={form.imageUrl} onChange={set("imageUrl")} placeholder="https://…" className="font-mono text-xs" />
+              <Label className="text-[10px] uppercase text-muted-foreground">Image</Label>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-1.5 shrink-0 cursor-pointer text-[11px]"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Importer une photo depuis votre ordinateur"
+                >
+                  <ImagePlus className="h-4 w-4" /> Importer une photo
+                </Button>
+                <Input
+                  value={form.imageUrl}
+                  onChange={set("imageUrl")}
+                  placeholder="ou URL https://…"
+                  className="flex-1 font-mono text-xs"
+                />
+              </div>
+              {currentImage && (
+                <div className="flex items-center gap-2">
+                  <span className="relative">
+                    <img
+                      src={currentImage}
+                      alt="Aperçu"
+                      className="h-16 w-16 rounded border border-primary/40 object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={clearImage}
+                      className="absolute -right-1.5 -top-1.5 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:text-foreground"
+                      aria-label="Retirer l'image"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                  <span className="truncate text-[10px] text-muted-foreground font-mono">
+                    {imageFile ? imageFile.name : "Image actuelle"}
+                  </span>
+                </div>
+              )}
+              <p className="text-[10px] text-muted-foreground">
+                Photo depuis votre ordinateur (PNG, JPG, WebP — max 5 Mo) ou lien d'image.
+              </p>
             </div>
             <div className="flex gap-2 pt-1">
               <Button type="button" variant="outline" className="flex-1" onClick={() => setOpen(false)}>Annuler</Button>

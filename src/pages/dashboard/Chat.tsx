@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { PaymentModal } from "@/components/PaymentModal";
 import { formatDate, formatMoney, ROLE_LABELS, timeAgo } from "@/lib/format";
+import { DEFAULT_CURRENCY } from "@/convex/adminConfig";
 import {
   CheckCircle2,
   CreditCard,
@@ -285,7 +286,7 @@ export default function Chat() {
                                 className="mt-2 w-full h-8 text-[11px]"
                                 onClick={() => setPayingPr(m.paymentRequest)}
                               >
-                                Payer {formatMoney(m.paymentRequest.amount)}
+                                Payer {formatMoney(m.paymentRequest.amount, m.paymentRequest.currency)}
                               </Button>
                             )}
                           </div>
@@ -418,13 +419,15 @@ export default function Chat() {
             </p>
             <div className="mt-4 space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-[10px] uppercase text-muted-foreground">Montant (XAF)</Label>
+                <Label className="text-[10px] uppercase text-muted-foreground">
+                  Montant ({DEFAULT_CURRENCY})
+                </Label>
                 <Input
                   type="number"
                   min={1}
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  placeholder="250000"
+                  placeholder="1500"
                   className="font-mono"
                   autoFocus
                   required
@@ -435,7 +438,7 @@ export default function Chat() {
                 <Textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Ex : 500 unités × 4 500 FCFA"
+                  placeholder={`Ex : 500 unités × 45 ${DEFAULT_CURRENCY}`}
                   rows={2}
                   className="font-mono text-xs"
                 />

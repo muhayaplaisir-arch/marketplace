@@ -2,6 +2,7 @@ import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
 import { Badge } from "@/components/ui/badge";
 import { formatDate, formatMoney, ORDER_STATUS_LABELS } from "@/lib/format";
+import { DEFAULT_CURRENCY } from "@/convex/adminConfig";
 import {
   Boxes,
   CreditCard,
@@ -29,7 +30,7 @@ export default function AdminOverview() {
     { label: "Fournisseurs", value: stats.totals.suppliers, icon: Store, sub: `${stats.totals.pendingSuppliers} en attente` },
     { label: "Produits", value: stats.totals.products, icon: Boxes, sub: "catalogue actif" },
     { label: "Commandes", value: stats.totals.orders, icon: MessagesSquare, sub: `${stats.totals.conversations} conversations` },
-    { label: "Revenus payés", value: formatMoney(stats.totals.totalRevenue), icon: Wallet, sub: "XAF" },
+    { label: "Revenus payés", value: formatMoney(stats.totals.totalRevenue), icon: Wallet, sub: DEFAULT_CURRENCY },
     { label: "Admins", value: stats.totals.admins, icon: CreditCard, sub: "accès protégé par code" },
   ];
 
@@ -79,7 +80,7 @@ export default function AdminOverview() {
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                  <p className="text-xs font-bold text-primary">{formatMoney(o.total)}</p>
+                  <p className="text-xs font-bold text-primary">{formatMoney(o.total, o.currency)}</p>
                   <Badge
                     variant="outline"
                     className={cn(

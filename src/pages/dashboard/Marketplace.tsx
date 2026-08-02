@@ -137,7 +137,7 @@ export default function Marketplace() {
                 </p>
                 <div className="mt-3 flex items-end justify-between">
                   <p className="text-lg font-bold text-primary">
-                    {formatMoney(p.price)}
+                    {formatMoney(p.price, p.currency)}
                     <span className="ml-1 text-[10px] font-normal text-muted-foreground">
                       / {p.unit}
                     </span>

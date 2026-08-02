@@ -119,7 +119,7 @@ export default function ProductDetail() {
               prix
             </p>
             <p className="mt-1 text-3xl font-bold text-primary">
-              {formatMoney(product.price)}
+              {formatMoney(product.price, product.currency)}
               <span className="ml-1 text-sm font-normal text-muted-foreground">/ {product.unit}</span>
             </p>
             {product.moq ? (
@@ -170,7 +170,7 @@ export default function ProductDetail() {
             </div>
             <div className="flex items-center justify-between rounded border border-primary/30 bg-primary/[0.05] px-3 py-2">
               <p className="text-[11px] text-muted-foreground">Total</p>
-              <p className="text-sm font-bold text-primary">{formatMoney(product.price * qty)}</p>
+              <p className="text-sm font-bold text-primary">{formatMoney(product.price * qty, product.currency)}</p>
             </div>
             <Button className="w-full gap-2" onClick={handleOrder} disabled={busy}>
               <ShoppingCart className="h-4 w-4" /> Commander maintenant
