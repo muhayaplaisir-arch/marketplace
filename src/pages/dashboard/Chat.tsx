@@ -14,14 +14,18 @@ import {
   CheckCircle2,
   CreditCard,
   FileText,
+  ImagePlus,
   Loader2,
   MessageSquareText,
   Send,
   Store,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ROLES } from "@/convex/constants";
+
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 
 export default function Chat() {
   const { conversationId } = useParams();
@@ -39,6 +43,7 @@ export default function Chat() {
   const sendMessage = useMutation(api.chat.sendMessage);
   const requestPayment = useMutation(api.chat.requestPayment);
   const payPaymentRequest = useMutation(api.chat.payPaymentRequest);
+  const generateUploadUrl = useMutation(api.chat.generateUploadUrl);
 
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -46,7 +51,10 @@ export default function Chat() {
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [payingPr, setPayingPr] = useState<any>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isSupplier = user?.role === ROLES.SUPPLIER;
 
@@ -54,13 +62,60 @@ export default function Chat() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages, conversationId]);
 
+  // Revoke the local preview object URL when it changes or the component unmounts.
+  useEffect(() => {
+    return () => {
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
+    };
+  }, [imagePreview]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error("Veuillez choisir un fichier image (PNG, JPG, WebP…).");
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      toast.error("Image trop lourde — maximum 5 Mo.");
+      return;
+    }
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  const clearImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!conversationId || !text.trim() || sending) return;
+    if (!conversationId || sending) return;
+    const trimmed = text.trim();
+    if (!trimmed && !imageFile) return;
     setSending(true);
     try {
-      await sendMessage({ conversationId: conversationId as any, content: text });
+      let imageStorageId: string | undefined;
+      if (imageFile) {
+        const uploadUrl = await generateUploadUrl();
+        const res = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": imageFile.type },
+          body: imageFile,
+        });
+        if (!res.ok) throw new Error("Échec du téléversement de l'image.");
+        const data = (await res.json()) as { storageId: string };
+        imageStorageId = data.storageId;
+      }
+      await sendMessage({
+        conversationId: conversationId as any,
+        content: trimmed || undefined,
+        imageStorageId: imageStorageId as any,
+      });
       setText("");
+      clearImage();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur d'envoi.");
     } finally {
@@ -186,7 +241,7 @@ export default function Chat() {
                 </div>
               ) : messages.length === 0 ? (
                 <p className="text-center text-xs text-muted-foreground py-10">
-                  Démarrez la discussion — négociez le prix ou commandez directement.
+                  Démarrez la discussion — négociez le prix, envoyez des photos ou commandez.
                 </p>
               ) : (
                 messages.map((m) => {
@@ -252,7 +307,26 @@ export default function Chat() {
                             </Button>
                           </div>
                         ) : (
-                          <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                          <>
+                            {m.imageUrl && (
+                              <a
+                                href={m.imageUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mb-1.5 block max-w-[280px] cursor-pointer"
+                                title="Ouvrir l'image"
+                              >
+                                <img
+                                  src={m.imageUrl}
+                                  alt="Image envoyée"
+                                  className="max-h-52 w-auto max-w-full rounded border border-border object-cover"
+                                />
+                              </a>
+                            )}
+                            {m.content && (
+                              <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                            )}
+                          </>
                         )}
                         {m.type === "text" && (
                           <p className="mt-1 text-right text-[9px] text-muted-foreground">
@@ -267,16 +341,62 @@ export default function Chat() {
             </div>
 
             {/* composer */}
-            <form onSubmit={handleSend} className="border-t border-border p-3 flex gap-2 bg-card">
-              <Input
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                placeholder="Écrire un message…"
-                className="font-mono text-xs"
-              />
-              <Button type="submit" size="icon" disabled={sending || !text.trim()}>
-                {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </Button>
+            <form onSubmit={handleSend} className="border-t border-border p-3 bg-card">
+              {imagePreview && (
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="relative">
+                    <img
+                      src={imagePreview}
+                      alt="Aperçu"
+                      className="h-14 w-14 rounded border border-primary/40 object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={clearImage}
+                      className="absolute -right-1.5 -top-1.5 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:text-foreground"
+                      aria-label="Retirer l'image"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                  <span className="truncate text-[10px] text-muted-foreground font-mono">
+                    {imageFile?.name}
+                  </span>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="shrink-0 cursor-pointer"
+                  disabled={sending}
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Envoyer une image de votre ordinateur"
+                >
+                  <ImagePlus className="h-4 w-4" />
+                </Button>
+                <Input
+                  value={text}
+                  onChange={(e) => setText(e.target.value)}
+                  placeholder="Écrire un message…"
+                  className="font-mono text-xs"
+                />
+                <Button
+                  type="submit"
+                  size="icon"
+                  disabled={sending || (!text.trim() && !imageFile)}
+                >
+                  {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </div>
             </form>
           </>
         )}

@@ -93,12 +93,15 @@ export const listMessages = query({
       let order = null;
       if (m.orderId) order = await ctx.db.get(m.orderId);
       const sender = await ctx.db.get(m.senderId);
+      let imageUrl: string | null = null;
+      if (m.imageStorageId) imageUrl = await ctx.storage.getUrl(m.imageStorageId);
       enriched.push({
         ...m,
         senderName: sender?.name ?? "Inconnu",
         senderRole: sender?.role ?? null,
         paymentRequest,
         order,
+        imageUrl,
       });
     }
     return enriched;
@@ -142,10 +145,19 @@ export const startConversation = mutation({
   },
 });
 
+/** Return a URL the client can POST a file to (Convex storage). */
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
 export const sendMessage = mutation({
   args: {
     conversationId: v.id("conversations"),
-    content: v.string(),
+    content: v.optional(v.string()),
+    imageStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
     const userId = await requireUser(ctx);
@@ -153,18 +165,25 @@ export const sendMessage = mutation({
     if (!conv || (conv.clientId !== userId && conv.supplierId !== userId)) {
       throw new Error("Conversation introuvable.");
     }
-    const content = args.content.trim();
-    if (!content) throw new Error("Message vide.");
+    const content = args.content?.trim() || undefined;
+    if (!content && !args.imageStorageId) throw new Error("Message vide.");
     const now = Date.now();
     await ctx.db.insert("messages", {
       conversationId: args.conversationId,
       senderId: userId,
       type: MESSAGE_TYPE.TEXT,
       content,
+      imageStorageId: args.imageStorageId,
       createdAt: now,
     });
+    const label = [
+      args.imageStorageId ? "📷 Image" : null,
+      content ?? null,
+    ]
+      .filter(Boolean)
+      .join(" ");
     await ctx.db.patch(args.conversationId, {
-      lastMessage: content,
+      lastMessage: label || "Image",
       lastMessageAt: now,
       updatedAt: now,
     });

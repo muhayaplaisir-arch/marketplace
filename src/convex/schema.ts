@@ -118,6 +118,7 @@ const schema = defineSchema(
         v.literal(MESSAGE_TYPE.SYSTEM),
       ),
       content: v.optional(v.string()),
+      imageStorageId: v.optional(v.id("_storage")),
       paymentRequestId: v.optional(v.id("paymentRequests")),
       orderId: v.optional(v.id("orders")),
       createdAt: v.number(),
