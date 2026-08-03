@@ -4,10 +4,14 @@ import { useMutation, useQuery } from "convex/react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PaymentModal } from "@/components/PaymentModal";
+import { DataPagination, RowNumber } from "@/components/DataPagination";
+import { usePagination } from "@/hooks/use-pagination";
 import { formatDate, formatMoney, ORDER_STATUS_LABELS } from "@/lib/format";
 import { CheckCircle2, CreditCard, PackageSearch, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+
+const PAGE_SIZE = 5;
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-600/15 text-amber-700 border-amber-600/30",
@@ -51,6 +55,10 @@ export default function Orders() {
   const orders = useQuery(api.orders.listMyOrders);
   const payOrder = useMutation(api.orders.payOrder);
   const [payingOrder, setPayingOrder] = useState<any>(null);
+  const { page, setPage, totalPages, slice, from, to, total } = usePagination(
+    orders,
+    PAGE_SIZE,
+  );
 
   if (orders === undefined) {
     return <div className="py-24 text-center text-sm text-muted-foreground">Chargement…</div>;
@@ -77,74 +85,91 @@ export default function Orders() {
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {orders.map((order) => {
-            const paid = order.paymentStatus === "paid";
-            const showPay = order.status === "pending" && !paid;
-            return (
-              <div key={order._id} className="rounded-lg border border-border bg-card overflow-hidden">
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/40 px-4 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 items-center justify-center rounded border border-primary/30 bg-primary/[0.07] text-primary">
-                      <Truck className="h-4 w-4" />
-                    </span>
-                    <div>
-                      <p className="text-xs font-bold">Commande {order.orderNumber}</p>
-                      <p className="text-[10px] text-muted-foreground">
-                        {order.supplierName} · {formatDate(order.createdAt)}
-                      </p>
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
+          <div className="divide-y divide-border/60">
+            {slice!.map((order, i) => {
+              const paid = order.paymentStatus === "paid";
+              const showPay = order.status === "pending" && !paid;
+              return (
+                <div key={order._id} className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5">
+                      <RowNumber index={i} page={page} pageSize={PAGE_SIZE} />
                     </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge className={cn("border text-[10px]", STATUS_COLORS[order.status])}>
-                      {ORDER_STATUS_LABELS[order.status] ?? order.status}
-                    </Badge>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[10px]",
-                        paid
-                          ? "border-primary/30 bg-primary/[0.06] text-primary"
-                          : "border-amber-600/30 bg-amber-600/[0.06] text-amber-700",
-                      )}
-                    >
-                      {paid ? "Payée" : "Non payée"}
-                    </Badge>
-                  </div>
-                </div>
-                <div className="grid gap-4 p-4 md:grid-cols-[1fr_240px]">
-                  <div>
-                    <p className="text-sm font-semibold">{order.productName}</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      {order.quantity} × {formatMoney(order.unitPrice)}
-                    </p>
-                    <p className="mt-1 text-xs text-muted-foreground">Quantité : {order.quantity}</p>
-                    {order.tracking.length > 0 && (
-                      <div className="mt-4">
-                        <TrackingTimeline order={order} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <span className="flex h-9 w-9 items-center justify-center rounded border border-primary/30 bg-primary/[0.07] text-primary">
+                            <Truck className="h-4 w-4" />
+                          </span>
+                          <div>
+                            <p className="text-xs font-bold">Commande {order.orderNumber}</p>
+                            <p className="text-[10px] text-muted-foreground">
+                              {order.supplierName} · {formatDate(order.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className={cn("border text-[10px]", STATUS_COLORS[order.status])}>
+                            {ORDER_STATUS_LABELS[order.status] ?? order.status}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className={cn(
+                              "text-[10px]",
+                              paid
+                                ? "border-primary/30 bg-primary/[0.06] text-primary"
+                                : "border-amber-600/30 bg-amber-600/[0.06] text-amber-700",
+                            )}
+                          >
+                            {paid ? "Payée" : "Non payée"}
+                          </Badge>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                  <div className="flex flex-col justify-between gap-3">
-                    <div className="rounded border border-border bg-muted/40 px-3 py-2 text-right">
-                      <p className="text-[10px] uppercase text-muted-foreground">Total</p>
-                      <p className="text-lg font-bold text-primary">{formatMoney(order.total)}</p>
+                      <div className="mt-3 grid gap-4 md:grid-cols-[1fr_240px]">
+                        <div>
+                          <p className="text-sm font-semibold">{order.productName}</p>
+                          <p className="mt-0.5 text-[11px] text-muted-foreground">
+                            {order.quantity} × {formatMoney(order.unitPrice)}
+                          </p>
+                          <p className="mt-1 text-xs text-muted-foreground">Quantité : {order.quantity}</p>
+                          {order.tracking.length > 0 && (
+                            <div className="mt-4">
+                              <TrackingTimeline order={order} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col justify-between gap-3">
+                          <div className="rounded border border-border bg-muted/40 px-3 py-2 text-right">
+                            <p className="text-[10px] uppercase text-muted-foreground">Total</p>
+                            <p className="text-lg font-bold text-primary">{formatMoney(order.total)}</p>
+                          </div>
+                          {showPay && (
+                            <Button className="w-full gap-1.5" onClick={() => setPayingOrder(order)}>
+                              <CreditCard className="h-3.5 w-3.5" /> Payer maintenant
+                            </Button>
+                          )}
+                          {paid && (
+                            <p className="flex items-center justify-center gap-1.5 text-[11px] text-primary">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Paiement confirmé
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    {showPay && (
-                      <Button className="w-full gap-1.5" onClick={() => setPayingOrder(order)}>
-                        <CreditCard className="h-3.5 w-3.5" /> Payer maintenant
-                      </Button>
-                    )}
-                    {paid && (
-                      <p className="flex items-center justify-center gap-1.5 text-[11px] text-primary">
-                        <CheckCircle2 className="h-3.5 w-3.5" /> Paiement confirmé
-                      </p>
-                    )}
                   </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+          <DataPagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            from={from}
+            to={to}
+            onChange={setPage}
+          />
         </div>
       )}
 

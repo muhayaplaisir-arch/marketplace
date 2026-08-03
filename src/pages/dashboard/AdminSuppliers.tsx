@@ -6,12 +6,16 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { DataPagination, RowNumber } from "@/components/DataPagination";
+import { usePagination } from "@/hooks/use-pagination";
 import { formatMoney, SUPPLIER_STATUS_LABELS } from "@/lib/format";
 import { CheckCircle2, Loader2, Store, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 type Tab = "pending" | "approved" | "rejected";
+
+const PAGE_SIZE = 10;
 
 export default function AdminSuppliers() {
   const [tab, setTab] = useState<Tab>("pending");
@@ -25,6 +29,13 @@ export default function AdminSuppliers() {
   const [busy, setBusy] = useState(false);
 
   const data: Record<Tab, any[] | undefined> = { pending, approved, rejected };
+
+  const list = data[tab];
+  const { page, setPage, totalPages, slice, from, to, total } = usePagination(
+    list,
+    PAGE_SIZE,
+    tab,
+  );
 
   const handleApprove = async (id: string) => {
     setBusy(true);
@@ -55,8 +66,6 @@ export default function AdminSuppliers() {
       setBusy(false);
     }
   };
-
-  const list = data[tab];
 
   return (
     <div className="space-y-6">
@@ -99,99 +108,112 @@ export default function AdminSuppliers() {
           <p className="mt-3 text-sm font-semibold">Aucun fournisseur ici</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {list.map((s) => (
-            <div key={s._id} className="rounded-lg border border-border bg-card p-4">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold">{s.company || s.name}</p>
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[9px]",
-                        s.supplierStatus === "approved" && "border-primary/30 text-primary",
-                        s.supplierStatus === "pending" && "border-amber-600/30 text-amber-700",
-                        s.supplierStatus === "rejected" && "border-destructive/30 text-destructive",
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
+          <div className="divide-y divide-border/60">
+            {slice!.map((s, i) => (
+              <div key={s._id} className="p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <RowNumber index={i} page={page} pageSize={PAGE_SIZE} />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold">{s.company || s.name}</p>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[9px]",
+                            s.supplierStatus === "approved" && "border-primary/30 text-primary",
+                            s.supplierStatus === "pending" && "border-amber-600/30 text-amber-700",
+                            s.supplierStatus === "rejected" && "border-destructive/30 text-destructive",
+                          )}
+                        >
+                          {SUPPLIER_STATUS_LABELS[s.supplierStatus ?? "pending"]}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-[11px] text-muted-foreground">
+                        {s.name} {s.email ? `· ${s.email}` : ""}
+                      </p>
+                      <div className="mt-1.5 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
+                        {s.businessType && <span>🏭 {s.businessType}</span>}
+                        {s.country && <span>🌍 {s.country}</span>}
+                        {s.phone && <span>📞 {s.phone}</span>}
+                      </div>
+                      <div className="mt-2 flex gap-3 text-[11px] text-muted-foreground">
+                        <span>{s.productCount} produits</span>
+                        <span>{s.orderCount} commandes</span>
+                        <span>{formatMoney(s.totalRevenue)} de revenus</span>
+                      </div>
+                      {s.supplierStatus === "rejected" && s.rejectedReason && (
+                        <p className="mt-2 rounded border border-destructive/20 bg-destructive/[0.05] px-3 py-1.5 text-[11px] text-destructive">
+                          Motif : {s.rejectedReason}
+                        </p>
                       )}
-                    >
-                      {SUPPLIER_STATUS_LABELS[s.supplierStatus ?? "pending"]}
-                    </Badge>
+                    </div>
                   </div>
-                  <p className="mt-1 text-[11px] text-muted-foreground">
-                    {s.name} {s.email ? `· ${s.email}` : ""}
-                  </p>
-                  <div className="mt-1.5 flex flex-wrap gap-3 text-[11px] text-muted-foreground">
-                    {s.businessType && <span>🏭 {s.businessType}</span>}
-                    {s.country && <span>🌍 {s.country}</span>}
-                    {s.phone && <span>📞 {s.phone}</span>}
+                  <div className="flex shrink-0 gap-1.5">
+                    {s.supplierStatus !== "approved" && (
+                      <Button
+                        size="sm"
+                        className="gap-1 text-[11px]"
+                        disabled={busy}
+                        onClick={() => handleApprove(s._id)}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Valider
+                      </Button>
+                    )}
+                    {s.supplierStatus !== "rejected" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1 text-[11px] text-destructive border-destructive/30"
+                        disabled={busy}
+                        onClick={() => setRejecting(s._id)}
+                      >
+                        <XCircle className="h-3.5 w-3.5" /> Refuser
+                      </Button>
+                    )}
                   </div>
-                  <div className="mt-2 flex gap-3 text-[11px] text-muted-foreground">
-                    <span>{s.productCount} produits</span>
-                    <span>{s.orderCount} commandes</span>
-                    <span>{formatMoney(s.totalRevenue)} de revenus</span>
-                  </div>
-                  {s.supplierStatus === "rejected" && s.rejectedReason && (
-                    <p className="mt-2 rounded border border-destructive/20 bg-destructive/[0.05] px-3 py-1.5 text-[11px] text-destructive">
-                      Motif : {s.rejectedReason}
-                    </p>
-                  )}
                 </div>
-                <div className="flex shrink-0 gap-1.5">
-                  {s.supplierStatus !== "approved" && (
-                    <Button
-                      size="sm"
-                      className="gap-1 text-[11px]"
-                      disabled={busy}
-                      onClick={() => handleApprove(s._id)}
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Valider
-                    </Button>
-                  )}
-                  {s.supplierStatus !== "rejected" && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1 text-[11px] text-destructive border-destructive/30"
-                      disabled={busy}
-                      onClick={() => setRejecting(s._id)}
-                    >
-                      <XCircle className="h-3.5 w-3.5" /> Refuser
-                    </Button>
-                  )}
-                </div>
+                {rejecting === s._id && (
+                  <div className="mt-3 space-y-2 rounded-md border border-destructive/20 bg-muted/40 p-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase text-muted-foreground">
+                        Motif du refus
+                      </Label>
+                      <Textarea
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder="Ex : informations d'entreprise incomplètes"
+                        rows={2}
+                        className="font-mono text-xs"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        disabled={busy || !reason.trim()}
+                        onClick={() => handleReject(s._id)}
+                      >
+                        Confirmer le refus
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setRejecting(null)}>
+                        Annuler
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
-              {rejecting === s._id && (
-                <div className="mt-3 space-y-2 rounded-md border border-destructive/20 bg-muted/40 p-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-[10px] uppercase text-muted-foreground">
-                      Motif du refus
-                    </Label>
-                    <Textarea
-                      value={reason}
-                      onChange={(e) => setReason(e.target.value)}
-                      placeholder="Ex : informations d'entreprise incomplètes"
-                      rows={2}
-                      className="font-mono text-xs"
-                    />
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      className="flex-1"
-                      disabled={busy || !reason.trim()}
-                      onClick={() => handleReject(s._id)}
-                    >
-                      Confirmer le refus
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setRejecting(null)}>
-                      Annuler
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
+          <DataPagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            from={from}
+            to={to}
+            onChange={setPage}
+          />
         </div>
       )}
     </div>

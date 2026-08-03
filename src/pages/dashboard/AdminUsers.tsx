@@ -2,9 +2,13 @@ import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { DataPagination } from "@/components/DataPagination";
+import { usePagination } from "@/hooks/use-pagination";
 import { Loader2, Users } from "lucide-react";
 import { ROLE_LABELS, SUPPLIER_STATUS_LABELS } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+const PAGE_SIZE = 10;
 
 const ROLE_COLOR: Record<string, string> = {
   client: "border-blue-600/30 text-blue-700",
@@ -14,6 +18,10 @@ const ROLE_COLOR: Record<string, string> = {
 
 export default function AdminUsers() {
   const users = useQuery(api.admin.listAllUsers);
+  const { page, setPage, totalPages, slice, from, to, total } = usePagination(
+    users,
+    PAGE_SIZE,
+  );
 
   return (
     <div className="space-y-6">
@@ -41,6 +49,7 @@ export default function AdminUsers() {
           <table className="w-full text-left text-xs">
             <thead className="border-b border-border bg-muted/50 text-[10px] uppercase tracking-wider text-muted-foreground">
               <tr>
+                <th className="w-10 px-3 py-3 font-medium">#</th>
                 <th className="px-4 py-3 font-medium">Utilisateur</th>
                 <th className="px-4 py-3 font-medium">Rôle</th>
                 <th className="px-4 py-3 font-medium">Statut fournisseur</th>
@@ -48,8 +57,11 @@ export default function AdminUsers() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {users.map((u) => (
+              {slice!.map((u, i) => (
                 <tr key={u._id} className="hover:bg-muted/30 transition-colors">
+                  <td className="px-3 py-3 font-mono text-[10px] font-bold text-muted-foreground">
+                    {(page - 1) * PAGE_SIZE + i + 1}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
                       <Avatar className="h-8 w-8 rounded border border-border">
@@ -96,6 +108,14 @@ export default function AdminUsers() {
               ))}
             </tbody>
           </table>
+          <DataPagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            from={from}
+            to={to}
+            onChange={setPage}
+          />
         </div>
       )}
     </div>

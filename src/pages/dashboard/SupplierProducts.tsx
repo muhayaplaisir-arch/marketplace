@@ -19,6 +19,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DataPagination, RowNumber } from "@/components/DataPagination";
+import { usePagination } from "@/hooks/use-pagination";
 import { formatMoney } from "@/lib/format";
 import {
   ImagePlus,
@@ -37,6 +39,7 @@ const UNITS = ["unité", "pièce", "kg", "tonne", "carton", "litre", "mètre"];
 const CURRENCIES = ["USD", "EUR", "XAF", "XOF", "GBP", "CNY", "NGN", "GHS", "MAD", "ZAR", "KES", "EGP"];
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_GALLERY = 8;
+const PAGE_SIZE = 8;
 
 interface FormState {
   name: string;
@@ -73,6 +76,10 @@ export default function SupplierProducts() {
   const updateProduct = useMutation(api.products.updateProduct);
   const deleteProduct = useMutation(api.products.deleteProduct);
   const generateUploadUrl = useMutation(api.products.generateUploadUrl);
+  const { page, setPage, totalPages, slice, from, to, total } = usePagination(
+    products,
+    PAGE_SIZE,
+  );
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -309,51 +316,62 @@ export default function SupplierProducts() {
           </p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {products.map((p) => (
-            <div key={p._id} className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card p-4">
-              <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded border border-border bg-muted/50 text-2xl">
-                {p.imageUrl ? (
-                  <img src={p.imageUrl} alt="" className="h-full w-full object-contain p-1" />
-                ) : (
-                  <span>📦</span>
-                )}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="truncate text-sm font-semibold">{p.name}</p>
-                  <Badge
-                    variant={p.active ? "outline" : "secondary"}
-                    className={cn(
-                      "text-[9px]",
-                      p.active && "border-primary/30 text-primary",
-                    )}
-                  >
-                    {p.active ? "Publié" : "Masqué"}
-                  </Badge>
+        <div className="rounded-lg border border-border bg-card overflow-hidden">
+          <div className="space-y-0 divide-y divide-border/60">
+            {slice!.map((p, i) => (
+              <div key={p._id} className="flex flex-wrap items-center gap-4 p-4">
+                <RowNumber index={i} page={page} pageSize={PAGE_SIZE} />
+                <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded border border-border bg-muted/50 text-2xl">
+                  {p.imageUrl ? (
+                    <img src={p.imageUrl} alt="" className="h-full w-full object-contain p-1" />
+                  ) : (
+                    <span>📦</span>
+                  )}
                 </div>
-                <p className="text-[11px] text-muted-foreground">
-                  {p.category} · {p.stock} en stock
-                  {p.moq ? ` · MOQ ${p.moq}` : ""}
-                  {p.galleryUrls && p.galleryUrls.length > 0 ? ` · ${p.galleryUrls.length + (p.imageUrl ? 1 : 0)} photos` : ""}
-                </p>
-                <p className="mt-0.5 text-sm font-bold text-primary">
-                  {formatMoney(p.price, p.currency)} <span className="text-[10px] font-normal text-muted-foreground">/ {p.unit}</span>
-                </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-semibold">{p.name}</p>
+                    <Badge
+                      variant={p.active ? "outline" : "secondary"}
+                      className={cn(
+                        "text-[9px]",
+                        p.active && "border-primary/30 text-primary",
+                      )}
+                    >
+                      {p.active ? "Publié" : "Masqué"}
+                    </Badge>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {p.category} · {p.stock} en stock
+                    {p.moq ? ` · MOQ ${p.moq}` : ""}
+                    {p.galleryUrls && p.galleryUrls.length > 0 ? ` · ${p.galleryUrls.length + (p.imageUrl ? 1 : 0)} photos` : ""}
+                  </p>
+                  <p className="mt-0.5 text-sm font-bold text-primary">
+                    {formatMoney(p.price, p.currency)} <span className="text-[10px] font-normal text-muted-foreground">/ {p.unit}</span>
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Button variant="outline" size="sm" className="text-[11px]" onClick={() => toggleActive(p)}>
+                    {p.active ? "Masquer" : "Publier"}
+                  </Button>
+                  <Button variant="outline" size="icon" onClick={() => openEdit(p)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button variant="outline" size="icon" className="text-destructive" onClick={() => handleDelete(p._id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <Button variant="outline" size="sm" className="text-[11px]" onClick={() => toggleActive(p)}>
-                  {p.active ? "Masquer" : "Publier"}
-                </Button>
-                <Button variant="outline" size="icon" onClick={() => openEdit(p)}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
-                <Button variant="outline" size="icon" className="text-destructive" onClick={() => handleDelete(p._id)}>
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
+          <DataPagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            from={from}
+            to={to}
+            onChange={setPage}
+          />
         </div>
       )}
 

@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ROLES } from "@/convex/constants";
 
+// Images partagées dans le chat : max 5 Mo.
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
 const MAX_DISCOUNT_PCT = 90;
 

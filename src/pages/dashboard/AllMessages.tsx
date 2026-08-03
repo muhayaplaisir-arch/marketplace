@@ -13,6 +13,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DataPagination, RowNumber } from "@/components/DataPagination";
+import { usePagination } from "@/hooks/use-pagination";
 import { ROLE_LABELS, timeAgo } from "@/lib/format";
 import {
   Inbox,
@@ -26,6 +28,8 @@ import {
 import { cn } from "@/lib/utils";
 
 type StatusFilter = "all" | "unread";
+
+const PAGE_SIZE = 10;
 
 const initials = (name: string) =>
   name
@@ -78,6 +82,12 @@ export default function AllMessages() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversations, status, partner, query, unread]);
+
+  const { page, setPage, totalPages, slice, from, to, total } = usePagination(
+    filtered,
+    PAGE_SIZE,
+    `${status}|${partner}|${query}`,
+  );
 
   const totalUnread = unread?.total ?? 0;
 
@@ -185,69 +195,82 @@ export default function AllMessages() {
             </Button>
           </div>
         ) : (
-          <div className="divide-y divide-border/60">
-            {filtered.map((c) => {
-              const count = unreadCount(c._id);
-              const name = c.other?.company || c.other?.name || "Partenaire";
-              return (
-                <button
-                  key={c._id}
-                  onClick={() => navigate(`/dashboard/chat/${c._id}`)}
-                  className={cn(
-                    "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40",
-                    count > 0 && "bg-primary/[0.03]",
-                  )}
-                >
-                  <span className="relative mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/[0.08] font-mono text-[11px] font-bold text-primary">
-                    {initials(name)}
-                    {count > 0 && (
-                      <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-destructive" />
+          <>
+            <div className="divide-y divide-border/60">
+              {slice!.map((c, i) => {
+                const count = unreadCount(c._id);
+                const name = c.other?.company || c.other?.name || "Partenaire";
+                return (
+                  <button
+                    key={c._id}
+                    onClick={() => navigate(`/dashboard/chat/${c._id}`)}
+                    className={cn(
+                      "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40",
+                      count > 0 && "bg-primary/[0.03]",
                     )}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex min-w-0 items-center gap-1.5">
-                        <p className={cn("truncate text-xs", count > 0 ? "font-bold" : "font-semibold")}>
-                          {name}
-                        </p>
-                        {c.other?.role && (
-                          <span className="flex shrink-0 items-center gap-0.5 text-[9px] text-muted-foreground">
-                            {c.other.role === "supplier" ? (
-                              <Store className="h-2.5 w-2.5" />
-                            ) : (
-                              <User className="h-2.5 w-2.5" />
-                            )}
-                            {ROLE_LABELS[c.other.role] ?? c.other.role}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        {count > 0 && (
-                          <Badge className="h-4 min-w-4 rounded-full px-1 text-[9px] font-bold leading-none bg-destructive text-white">
-                            {count > 99 ? "99+" : count}
-                          </Badge>
-                        )}
-                        {c.lastMessageAt && (
-                          <span className="text-[9px] text-muted-foreground">{timeAgo(c.lastMessageAt)}</span>
-                        )}
-                      </div>
-                    </div>
-                    <p
-                      className={cn(
-                        "mt-0.5 truncate text-[11px]",
-                        count > 0 ? "font-medium text-foreground" : "text-muted-foreground",
+                  >
+                    <span className="mt-0.5">
+                      <RowNumber index={i} page={page} pageSize={PAGE_SIZE} />
+                    </span>
+                    <span className="relative mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-primary/30 bg-primary/[0.08] font-mono text-[11px] font-bold text-primary">
+                      {initials(name)}
+                      {count > 0 && (
+                        <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-destructive" />
                       )}
-                    >
-                      {c.lastMessage || "Nouvelle conversation"}
-                    </p>
-                    {c.productName && (
-                      <p className="mt-0.5 text-[10px] text-primary">📦 {c.productName}</p>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center justify-between gap-2">
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span className={cn("truncate text-xs", count > 0 ? "font-bold" : "font-semibold")}>
+                            {name}
+                          </span>
+                          {c.other?.role && (
+                            <span className="flex shrink-0 items-center gap-0.5 text-[9px] text-muted-foreground">
+                              {c.other.role === "supplier" ? (
+                                <Store className="h-2.5 w-2.5" />
+                              ) : (
+                                <User className="h-2.5 w-2.5" />
+                              )}
+                              {ROLE_LABELS[c.other.role] ?? c.other.role}
+                            </span>
+                          )}
+                        </span>
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          {count > 0 && (
+                            <Badge className="h-4 min-w-4 rounded-full px-1 text-[9px] font-bold leading-none bg-destructive text-white">
+                              {count > 99 ? "99+" : count}
+                            </Badge>
+                          )}
+                          {c.lastMessageAt && (
+                            <span className="text-[9px] text-muted-foreground">{timeAgo(c.lastMessageAt)}</span>
+                          )}
+                        </span>
+                      </span>
+                      <span
+                        className={cn(
+                          "mt-0.5 block truncate text-[11px]",
+                          count > 0 ? "font-medium text-foreground" : "text-muted-foreground",
+                        )}
+                      >
+                        {c.lastMessage || "Nouvelle conversation"}
+                      </span>
+                      {c.productName && (
+                        <span className="mt-0.5 block text-[10px] text-primary">📦 {c.productName}</span>
+                      )}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <DataPagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              from={from}
+              to={to}
+              onChange={setPage}
+            />
+          </>
         )}
       </div>
     </div>

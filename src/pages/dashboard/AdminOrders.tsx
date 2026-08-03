@@ -1,12 +1,20 @@
 import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
 import { Badge } from "@/components/ui/badge";
+import { DataPagination } from "@/components/DataPagination";
+import { usePagination } from "@/hooks/use-pagination";
 import { formatDate, formatMoney, ORDER_STATUS_LABELS } from "@/lib/format";
 import { Loader2, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const PAGE_SIZE = 10;
+
 export default function AdminOrders() {
   const orders = useQuery(api.admin.listAllOrders);
+  const { page, setPage, totalPages, slice, from, to, total } = usePagination(
+    orders,
+    PAGE_SIZE,
+  );
 
   return (
     <div className="space-y-6">
@@ -34,6 +42,7 @@ export default function AdminOrders() {
           <table className="w-full text-left text-xs">
             <thead className="border-b border-border bg-muted/50 text-[10px] uppercase tracking-wider text-muted-foreground">
               <tr>
+                <th className="w-10 px-3 py-3 font-medium">#</th>
                 <th className="px-4 py-3 font-medium">Commande</th>
                 <th className="px-4 py-3 font-medium">Client</th>
                 <th className="px-4 py-3 font-medium">Fournisseur</th>
@@ -44,8 +53,11 @@ export default function AdminOrders() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {orders.map((o) => (
+              {slice!.map((o, i) => (
                 <tr key={o._id} className="hover:bg-muted/30 transition-colors">
+                  <td className="px-3 py-3 font-mono text-[10px] font-bold text-muted-foreground">
+                    {(page - 1) * PAGE_SIZE + i + 1}
+                  </td>
                   <td className="px-4 py-3">
                     <p className="font-semibold">{o.orderNumber}</p>
                     <p className="text-[10px] text-muted-foreground">{o.productName}</p>
@@ -84,6 +96,14 @@ export default function AdminOrders() {
               ))}
             </tbody>
           </table>
+          <DataPagination
+            page={page}
+            totalPages={totalPages}
+            total={total}
+            from={from}
+            to={to}
+            onChange={setPage}
+          />
         </div>
       )}
     </div>
