@@ -93,6 +93,7 @@ const schema = defineSchema(
       unit: v.string(),
       imageUrl: v.optional(v.string()),
       imageStorageId: v.optional(v.id("_storage")),
+      galleryStorageIds: v.optional(v.array(v.id("_storage"))),
       currency: v.optional(v.string()),
       stock: v.number(),
       moq: v.optional(v.number()),

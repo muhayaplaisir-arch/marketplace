@@ -6,16 +6,24 @@ import { requireUser } from "./users";
 import { ROLES, SUPPLIER_STATUS } from "./schema";
 import { DEFAULT_CURRENCY } from "./adminConfig";
 
-/** Resolve a product's display image (stored file → URL) + default currency. */
+/** Resolve a product's display image (stored file → URL) + gallery URLs. */
 async function enrichProduct(ctx: QueryCtx, p: Doc<"products">) {
   let imageUrl = p.imageUrl;
   if (p.imageStorageId) {
     const url = await ctx.storage.getUrl(p.imageStorageId);
     if (url) imageUrl = url;
   }
+  let galleryUrls: string[] = [];
+  if (p.galleryStorageIds && p.galleryStorageIds.length > 0) {
+    const urls = await Promise.all(
+      p.galleryStorageIds.map((id) => ctx.storage.getUrl(id)),
+    );
+    galleryUrls = urls.filter((u): u is string => !!u);
+  }
   return {
     ...p,
     imageUrl,
+    galleryUrls,
     currency: p.currency ?? DEFAULT_CURRENCY,
   };
 }
@@ -116,6 +124,7 @@ export const createProduct = mutation({
     unit: v.string(),
     imageUrl: v.optional(v.string()),
     imageStorageId: v.optional(v.id("_storage")),
+    galleryStorageIds: v.optional(v.array(v.id("_storage"))),
     currency: v.optional(v.string()),
     stock: v.number(),
     moq: v.optional(v.number()),
@@ -139,6 +148,7 @@ export const createProduct = mutation({
       unit: args.unit.trim() || "unité",
       imageUrl: args.imageUrl?.trim() || undefined,
       imageStorageId: args.imageStorageId,
+      galleryStorageIds: args.galleryStorageIds,
       currency: args.currency ?? DEFAULT_CURRENCY,
       stock: args.stock,
       moq: args.moq,
@@ -159,6 +169,7 @@ export const updateProduct = mutation({
     unit: v.optional(v.string()),
     imageUrl: v.optional(v.string()),
     imageStorageId: v.optional(v.id("_storage")),
+    galleryStorageIds: v.optional(v.array(v.id("_storage"))),
     currency: v.optional(v.string()),
     stock: v.optional(v.number()),
     moq: v.optional(v.number()),
@@ -181,6 +192,7 @@ export const updateProduct = mutation({
     if (args.unit !== undefined) patch.unit = args.unit.trim();
     if (args.imageUrl !== undefined) patch.imageUrl = args.imageUrl.trim() || undefined;
     if (args.imageStorageId !== undefined) patch.imageStorageId = args.imageStorageId;
+    if (args.galleryStorageIds !== undefined) patch.galleryStorageIds = args.galleryStorageIds;
     if (args.currency !== undefined) patch.currency = args.currency;
     if (args.stock !== undefined) {
       if (args.stock < 0) throw new Error("Stock invalide.");

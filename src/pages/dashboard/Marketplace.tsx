@@ -100,12 +100,12 @@ export default function Marketplace() {
               onClick={() => navigate(`/dashboard/product/${p._id}`)}
               className="group rounded-lg border border-border bg-card overflow-hidden text-left hover:shadow-md hover:-translate-y-0.5 transition-all"
             >
-              <div className="relative flex h-40 items-center justify-center bg-muted/50 border-b border-border text-6xl">
+              <div className="relative flex h-44 items-center justify-center bg-muted/50 border-b border-border text-6xl">
                 {p.imageUrl ? (
                   <img
                     src={p.imageUrl}
                     alt={p.name}
-                    className="h-full w-full object-cover group-hover:scale-105 transition-transform"
+                    className="h-full w-full object-contain p-4 group-hover:scale-105 transition-transform"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = "none";
                     }}

@@ -166,7 +166,13 @@ export const markConversationRead = mutation({
   },
 });
 
-/** Start (or reuse) a conversation between a client and a supplier. */
+/**
+ * Start (or reuse) a conversation between a client and a supplier.
+ * Each time the client clicks "Discuter" on a product, the product (name +
+ * price) is announced as a message — even when the conversation is reused —
+ * so the supplier always knows which product the client is talking about
+ * (a client may discuss several products in the same chat).
+ */
 export const startConversation = mutation({
   args: {
     supplierId: v.id("users"),
@@ -178,6 +184,16 @@ export const startConversation = mutation({
     if (!supplier || supplier.role !== ROLES.SUPPLIER) {
       throw new Error("Fournisseur introuvable.");
     }
+
+    // Build the auto intro message about the product (name + price).
+    const product = args.productId ? await ctx.db.get(args.productId) : null;
+    let autoContent: string | null = null;
+    if (product) {
+      const currency = product.currency ?? DEFAULT_CURRENCY;
+      const priceLabel = `${product.price.toLocaleString("fr-FR")} ${currency}`;
+      autoContent = `Bonjour, je suis intéressé par « ${product.name} » au prix de ${priceLabel}/${product.unit}.`;
+    }
+
     // Reuse an existing conversation if one exists for this pair (+product).
     const existing = await ctx.db
       .query("conversations")
@@ -189,37 +205,45 @@ export const startConversation = mutation({
       existing.find((c) => (c.productId ?? null) === (args.productId ?? null)) ??
       existing.find((c) => !c.productId) ??
       existing[0];
-    if (match) return match._id;
 
     const now = Date.now();
-    const id = await ctx.db.insert("conversations", {
-      clientId: userId,
-      supplierId: args.supplierId,
-      productId: args.productId,
-      createdAt: now,
-      updatedAt: now,
-      lastMessageAt: now,
-      clientLastReadAt: now,
-    });
+    const conversationId = match
+      ? match._id
+      : await ctx.db.insert("conversations", {
+          clientId: userId,
+          supplierId: args.supplierId,
+          productId: args.productId,
+          createdAt: now,
+          updatedAt: now,
+          lastMessageAt: now,
+          clientLastReadAt: now,
+        });
 
-    // Auto first message with the product + price so the supplier knows
-    // exactly what the client is asking about.
-    const product = args.productId ? await ctx.db.get(args.productId) : null;
-    if (product) {
-      const currency = product.currency ?? DEFAULT_CURRENCY;
-      const priceLabel = `${product.price.toLocaleString("fr-FR")} ${currency}`;
-      const autoContent = `Bonjour, je suis intéressé par « ${product.name} » au prix de ${priceLabel}/${product.unit}.`;
-      await ctx.db.insert("messages", {
-        conversationId: id,
-        senderId: userId,
-        type: MESSAGE_TYPE.TEXT,
-        content: autoContent,
-        createdAt: now,
-      });
-      await ctx.db.patch(id, { lastMessage: autoContent });
+    // Announce the product in the conversation, once per product (dedup by
+    // exact content) so repeated clicks don't spam the supplier.
+    if (autoContent) {
+      const messages = await ctx.db
+        .query("messages")
+        .withIndex("by_conversation", (q) => q.eq("conversationId", conversationId))
+        .collect();
+      const alreadySent = messages.some((m) => m.content === autoContent);
+      if (!alreadySent) {
+        await ctx.db.insert("messages", {
+          conversationId,
+          senderId: userId,
+          type: MESSAGE_TYPE.TEXT,
+          content: autoContent,
+          createdAt: now,
+        });
+        await ctx.db.patch(conversationId, {
+          lastMessage: autoContent,
+          lastMessageAt: now,
+          updatedAt: now,
+        });
+      }
     }
 
-    return id;
+    return conversationId;
   },
 });
 

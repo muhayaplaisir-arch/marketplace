@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
 import { useNavigate, useParams } from "react-router";
@@ -6,9 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { formatMoney } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import {
   ArrowLeft,
   BadgeCheck,
+  ChevronLeft,
+  ChevronRight,
   Minus,
   MessageSquareText,
   Plus,
@@ -43,6 +46,11 @@ export default function ProductDetail() {
   const startConversation = useMutation(api.chat.startConversation);
   const [qty, setQty] = useState(1);
   const [busy, setBusy] = useState(false);
+  const [activeImage, setActiveImage] = useState(0);
+
+  useEffect(() => {
+    setActiveImage(0);
+  }, [productId]);
 
   if (product === undefined) {
     return <div className="py-24 text-center text-sm text-muted-foreground">Chargement…</div>;
@@ -51,6 +59,10 @@ export default function ProductDetail() {
     return <div className="py-24 text-center text-sm text-muted-foreground">Produit introuvable.</div>;
   }
 
+  const images = [product.imageUrl, ...(product.galleryUrls ?? [])].filter(
+    (u): u is string => !!u,
+  );
+  const safeIndex = Math.min(activeImage, Math.max(0, images.length - 1));
   const similarProducts = (similar ?? []).filter((p) => p._id !== product._id).slice(0, 6);
 
   const clampQty = (v: number) => Math.max(1, Math.min(product.stock, v));
@@ -89,19 +101,10 @@ export default function ProductDetail() {
       </Button>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* image */}
+        {/* image gallery */}
         <div className="rounded-lg border border-border bg-card overflow-hidden">
-          <div className="relative flex h-72 items-center justify-center bg-muted/50 border-b border-border text-8xl">
-            {product.imageUrl ? (
-              <img
-                src={product.imageUrl}
-                alt={product.name}
-                className="h-full w-full object-cover"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = "none";
-                }}
-              />
-            ) : null}
+          <div className="relative flex h-80 items-center justify-center overflow-hidden border-b border-border bg-muted/50 text-8xl">
+            {/* emoji fallback behind the image */}
             <span className="absolute inset-0 flex items-center justify-center">
               {product.category === "Électronique"
                 ? "📱"
@@ -115,8 +118,63 @@ export default function ProductDetail() {
                         ? "🏗️"
                         : "📦"}
             </span>
+            {images.length > 0 && (
+              <img
+                key={safeIndex}
+                src={images[safeIndex]}
+                alt={product.name}
+                className="relative z-10 h-full w-full animate-fade-in object-contain p-4"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = "none";
+                }}
+              />
+            )}
+            {images.length > 1 && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute left-2 top-1/2 z-20 h-8 w-8 -translate-y-1/2 cursor-pointer rounded-full border border-border bg-background/80 hover:bg-background"
+                  onClick={() =>
+                    setActiveImage((safeIndex - 1 + images.length) % images.length)
+                  }
+                  aria-label="Photo précédente"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-2 top-1/2 z-20 h-8 w-8 -translate-y-1/2 cursor-pointer rounded-full border border-border bg-background/80 hover:bg-background"
+                  onClick={() => setActiveImage((safeIndex + 1) % images.length)}
+                  aria-label="Photo suivante"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </>
+            )}
           </div>
-          <div className="p-4 flex items-center justify-between">
+          {images.length > 1 && (
+            <div className="flex flex-wrap gap-2 p-3">
+              {images.map((src, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setActiveImage(i)}
+                  className={cn(
+                    "cursor-pointer overflow-hidden rounded border transition-all",
+                    i === safeIndex
+                      ? "border-primary ring-1 ring-primary"
+                      : "border-border opacity-70 hover:opacity-100",
+                  )}
+                  aria-label={`Photo ${i + 1}`}
+                >
+                  <img src={src} alt="" className="h-14 w-14 object-contain bg-muted/40 p-1" />
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center justify-between border-t border-border p-4">
             <Badge variant="secondary" className="text-[10px]">
               {product.category}
             </Badge>
@@ -231,7 +289,7 @@ export default function ProductDetail() {
                     <img
                       src={p.imageUrl}
                       alt={p.name}
-                      className="h-full w-full object-cover group-hover:scale-105 transition-transform"
+                      className="h-full w-full object-contain p-3 group-hover:scale-105 transition-transform"
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = "none";
                       }}
