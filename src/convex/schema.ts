@@ -57,6 +57,11 @@ export const orderStatusValidator = v.union(
   v.literal(ORDER_STATUS.CANCELLED),
 );
 
+export const STOCK_MOVEMENT_TYPE = {
+  DECREMENT: "decrement",
+  RESTOCK: "restock",
+} as const;
+
 // ---- Schema ---------------------------------------------------------------
 const schema = defineSchema(
   {
@@ -168,6 +173,23 @@ const schema = defineSchema(
       .index("by_client", ["clientId"])
       .index("by_supplier", ["supplierId"])
       .index("by_orderNumber", ["orderNumber"]),
+
+    stockMovements: defineTable({
+      productId: v.id("products"),
+      orderId: v.optional(v.id("orders")),
+      supplierId: v.id("users"),
+      type: v.union(
+        v.literal(STOCK_MOVEMENT_TYPE.DECREMENT),
+        v.literal(STOCK_MOVEMENT_TYPE.RESTOCK),
+      ),
+      quantity: v.number(),
+      stockAfter: v.number(),
+      reason: v.optional(v.string()),
+      createdAt: v.number(),
+    })
+      .index("by_product", ["productId", "createdAt"])
+      .index("by_supplier", ["supplierId", "createdAt"])
+      .index("by_order", ["orderId"]),
   },
   {
     schemaValidation: false,

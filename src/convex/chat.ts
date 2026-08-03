@@ -275,10 +275,21 @@ export const payPaymentRequest = mutation({
         createdAt: now,
         updatedAt: now,
       });
-      // Decrement the product stock once the payment is confirmed.
+      // Decrement the product stock once the payment is confirmed + log the movement.
       if (product) {
+        const newStock = Math.max(0, product.stock - 1);
         await ctx.db.patch(product._id, {
-          stock: Math.max(0, product.stock - 1),
+          stock: newStock,
+        });
+        await ctx.db.insert("stockMovements", {
+          productId: product._id,
+          orderId,
+          supplierId: pr.supplierId,
+          type: "decrement",
+          quantity: 1,
+          stockAfter: newStock,
+          reason: "Paiement négocié en chat",
+          createdAt: now,
         });
       }
       await ctx.db.patch(args.paymentRequestId, { orderId, status: PAYMENT_STATUS.PAID, paidAt: now });

@@ -113,12 +113,23 @@ export const payOrder = mutation({
       ],
       updatedAt: now,
     });
-    // Decrement the product stock once the payment is confirmed.
+    // Decrement the product stock once the payment is confirmed + log the movement.
     if (order.productId) {
       const product = await ctx.db.get(order.productId);
       if (product) {
+        const newStock = Math.max(0, product.stock - order.quantity);
         await ctx.db.patch(product._id, {
-          stock: Math.max(0, product.stock - order.quantity),
+          stock: newStock,
+        });
+        await ctx.db.insert("stockMovements", {
+          productId: product._id,
+          orderId: order._id,
+          supplierId: order.supplierId,
+          type: "decrement",
+          quantity: order.quantity,
+          stockAfter: newStock,
+          reason: "Paiement de la commande",
+          createdAt: now,
         });
       }
     }
@@ -179,10 +190,43 @@ export const listSupplierOrders = query({
     const enriched = [];
     for (const o of orders.sort((a, b) => b.createdAt - a.createdAt)) {
       const client = await ctx.db.get(o.clientId);
+      let stockRemaining: number | null = null;
+      if (o.productId) {
+        const product = await ctx.db.get(o.productId);
+        stockRemaining = product ? product.stock : null;
+      }
       enriched.push({
         ...o,
         clientName: client?.name ?? "Client",
         clientCountry: client?.country,
+        stockRemaining,
+      });
+    }
+    return enriched;
+  },
+});
+
+/** Stock movement history for all the supplier's products (linked to orders). */
+export const listSupplierStockMovements = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUser(ctx);
+    const movements = await ctx.db
+      .query("stockMovements")
+      .withIndex("by_supplier", (q) => q.eq("supplierId", userId))
+      .collect();
+    const enriched = [];
+    for (const m of movements.sort((a, b) => b.createdAt - a.createdAt)) {
+      const product = await ctx.db.get(m.productId);
+      let orderNumber: string | null = null;
+      if (m.orderId) {
+        const order = await ctx.db.get(m.orderId);
+        orderNumber = order?.orderNumber ?? null;
+      }
+      enriched.push({
+        ...m,
+        productName: product?.name ?? "Produit supprimé",
+        orderNumber,
       });
     }
     return enriched;
@@ -237,11 +281,22 @@ export const updateOrderStatus = mutation({
       throw new Error(`Transition invalide depuis "${order.status}".`);
     }
     if (args.status === "cancelled") {
-      // Put the units back in stock if the order had been paid.
+      // Put the units back in stock if the order had been paid + log the movement.
       if (order.paymentStatus === "paid" && order.productId) {
         const product = await ctx.db.get(order.productId);
         if (product) {
-          await ctx.db.patch(product._id, { stock: product.stock + order.quantity });
+          const newStock = product.stock + order.quantity;
+          await ctx.db.patch(product._id, { stock: newStock });
+          await ctx.db.insert("stockMovements", {
+            productId: product._id,
+            orderId: order._id,
+            supplierId: order.supplierId,
+            type: "restock",
+            quantity: order.quantity,
+            stockAfter: newStock,
+            reason: args.note?.trim() || "Commande annulée",
+            createdAt: Date.now(),
+          });
         }
       }
       await ctx.db.patch(args.orderId, {

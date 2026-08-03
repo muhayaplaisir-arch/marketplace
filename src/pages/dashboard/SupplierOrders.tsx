@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatDate, formatMoney, ORDER_STATUS_LABELS } from "@/lib/format";
-import { Loader2, MapPin, PackageSearch, Truck } from "lucide-react";
+import { Layers, Loader2, MapPin, Minus, PackageSearch, Plus, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -28,11 +28,26 @@ const NEXT_STEPS: Record<string, { status: string; label: string }[]> = {
 
 export default function SupplierOrders() {
   const orders = useQuery(api.orders.listSupplierOrders);
+  const movements = useQuery(api.orders.listSupplierStockMovements);
   const updateOrderStatus = useMutation(api.orders.updateOrderStatus);
   const [active, setActive] = useState<string | null>(null);
   const [location, setLocation] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Group stock movements by order so each order card shows its own history.
+  const movementsByOrder = useMemo(() => {
+    const map = new Map<string, NonNullable<typeof movements>[number][]>();
+    if (movements) {
+      for (const m of movements) {
+        if (!m.orderId) continue;
+        const list = map.get(m.orderId) ?? [];
+        list.push(m);
+        map.set(m.orderId, list);
+      }
+    }
+    return map;
+  }, [movements]);
 
   const openUpdate = (orderId: string) => {
     setActive(orderId);
@@ -71,7 +86,7 @@ export default function SupplierOrders() {
         </p>
       </div>
 
-      {orders === undefined ? (
+      {orders === undefined || movements === undefined ? (
         <div className="py-20 text-center">
           <Loader2 className="mx-auto h-6 w-6 animate-spin text-muted-foreground" />
         </div>
@@ -88,6 +103,7 @@ export default function SupplierOrders() {
           {orders.map((order) => {
             const paid = order.paymentStatus === "paid";
             const steps = NEXT_STEPS[order.status] ?? [];
+            const orderMovements = movementsByOrder.get(order._id) ?? [];
             return (
               <div key={order._id} className="rounded-lg border border-border bg-card overflow-hidden">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/40 px-4 py-3">
@@ -128,6 +144,24 @@ export default function SupplierOrders() {
                       {order.quantity} × {formatMoney(order.unitPrice)} ={" "}
                       <span className="font-bold text-foreground">{formatMoney(order.total)}</span>
                     </p>
+                    {order.stockRemaining !== null && (
+                      <p
+                        className={cn(
+                          "mt-2 inline-flex items-center gap-1.5 rounded border px-2 py-1 text-[11px]",
+                          order.stockRemaining <= 0
+                            ? "border-destructive/30 bg-destructive/[0.06] text-destructive"
+                            : order.stockRemaining < 10
+                              ? "border-amber-600/30 bg-amber-600/[0.06] text-amber-700"
+                              : "border-border bg-muted/40 text-muted-foreground",
+                        )}
+                      >
+                        <Layers className="h-3.5 w-3.5" />
+                        Stock restant :{" "}
+                        <span className="font-bold">
+                          {order.stockRemaining} {order.stockRemaining > 1 ? "unités" : "unité"}
+                        </span>
+                      </p>
+                    )}
                     <div className="mt-3 space-y-1.5">
                       {order.tracking.map((t: any, i: number) => (
                         <div key={i} className="flex items-start gap-2 text-[11px]">
@@ -148,6 +182,39 @@ export default function SupplierOrders() {
                         </div>
                       ))}
                     </div>
+                    {orderMovements.length > 0 && (
+                      <div className="mt-3 border-t border-border pt-3">
+                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
+                          Historique de stock
+                        </p>
+                        <div className="mt-2 space-y-1.5">
+                          {orderMovements.map((m) => (
+                            <div key={m._id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-[11px]">
+                              <span className="flex items-center gap-1.5">
+                                {m.type === "decrement" ? (
+                                  <Minus className="h-3 w-3 shrink-0 text-destructive" />
+                                ) : (
+                                  <Plus className="h-3 w-3 shrink-0 text-emerald-600" />
+                                )}
+                                <span
+                                  className={cn(
+                                    "font-bold",
+                                    m.type === "decrement" ? "text-destructive" : "text-emerald-700",
+                                  )}
+                                >
+                                  {m.type === "decrement" ? "−" : "+"}
+                                  {m.quantity} {m.quantity > 1 ? "unités" : "unité"}
+                                </span>
+                                <span className="text-muted-foreground/60">· {m.reason ?? ""}</span>
+                              </span>
+                              <span className="text-muted-foreground">
+                                restant : <span className="font-semibold text-foreground">{m.stockAfter}</span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-2">
                     {!paid && order.status === "pending" && (
