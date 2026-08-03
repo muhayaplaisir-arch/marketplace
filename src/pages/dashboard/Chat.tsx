@@ -8,6 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { PaymentModal } from "@/components/PaymentModal";
 import { formatDate, formatMoney, ROLE_LABELS, timeAgo } from "@/lib/format";
 import { DEFAULT_CURRENCY } from "@/convex/adminConfig";
@@ -27,6 +34,7 @@ import { cn } from "@/lib/utils";
 import { ROLES } from "@/convex/constants";
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5 MB
+const MAX_DISCOUNT_PCT = 90;
 
 export default function Chat() {
   const { conversationId } = useParams();
@@ -42,6 +50,10 @@ export default function Chat() {
     conversationId ? { conversationId: conversationId as any } : "skip",
   );
   const unread = useQuery(api.chat.getUnreadSummary);
+  const supplierProducts = useQuery(
+    api.products.listMyProducts,
+    user?.role === ROLES.SUPPLIER ? {} : "skip",
+  );
   const sendMessage = useMutation(api.chat.sendMessage);
   const requestPayment = useMutation(api.chat.requestPayment);
   const payPaymentRequest = useMutation(api.chat.payPaymentRequest);
@@ -58,8 +70,15 @@ export default function Chat() {
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const prevPayReqOpenRef = useRef(false);
+
+  // Payment request form (product + quantity + discount).
+  const [selectedProductId, setSelectedProductId] = useState<string>("");
+  const [qty, setQty] = useState("1");
+  const [discount, setDiscount] = useState("0");
 
   const isSupplier = user?.role === ROLES.SUPPLIER;
+  const selectedProduct = supplierProducts?.find((p) => p._id === selectedProductId);
 
   // Mark the opened conversation as read once its messages are loaded
   // (and again whenever a new incoming message arrives while viewing).
@@ -71,6 +90,18 @@ export default function Chat() {
     }
   }, [conversationId, messages, unread, markConversationRead]);
 
+  // Reset the payment form each time the popup opens.
+  useEffect(() => {
+    if (payReqOpen && !prevPayReqOpenRef.current) {
+      setQty("1");
+      setDiscount("0");
+      setNote("");
+      setAmount("");
+      setSelectedProductId((conversation as any)?.productId ?? "");
+    }
+    prevPayReqOpenRef.current = payReqOpen;
+  }, [payReqOpen, conversation]);
+
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages, conversationId]);
@@ -81,6 +112,14 @@ export default function Chat() {
       if (imagePreview) URL.revokeObjectURL(imagePreview);
     };
   }, [imagePreview]);
+
+  const qtyNum = Math.max(1, parseInt(qty, 10) || 1);
+  const discountPct = Math.min(MAX_DISCOUNT_PCT, Math.max(0, parseFloat(discount) || 0));
+  const unitPriceAfter = selectedProduct
+    ? Math.round(selectedProduct.price * (1 - discountPct / 100))
+    : null;
+  const computedTotal = selectedProduct && unitPriceAfter !== null ? qtyNum * unitPriceAfter : null;
+  const finalAmount = computedTotal ?? (Number(amount) || 0);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -138,16 +177,16 @@ export default function Chat() {
 
   const handleRequestPayment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!conversationId || !amount || Number(amount) <= 0) return;
+    if (!conversationId || finalAmount <= 0) return;
     try {
       await requestPayment({
         conversationId: conversationId as any,
-        amount: Number(amount),
+        amount: finalAmount,
         note: note || undefined,
+        productId: selectedProduct?._id as any,
+        quantity: selectedProduct ? qtyNum : undefined,
       });
       setPayReqOpen(false);
-      setAmount("");
-      setNote("");
       toast.success("Demande de paiement envoyée au client.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur.");
@@ -294,6 +333,14 @@ export default function Chat() {
                               <p className="flex items-center gap-1.5 font-semibold text-amber-700">
                                 <CreditCard className="h-3.5 w-3.5" /> Demande de paiement
                               </p>
+                              {m.paymentRequest.productName && (
+                                <p className="mt-1 flex items-center gap-1 text-[10px] text-muted-foreground">
+                                  📦 {m.paymentRequest.productName}
+                                  {m.paymentRequest.quantity && m.paymentRequest.quantity > 1
+                                    ? ` × ${m.paymentRequest.quantity}`
+                                    : ""}
+                                </p>
+                              )}
                               <p className="mt-1.5 text-xl font-bold text-primary">
                                 {formatMoney(m.paymentRequest.amount, m.paymentRequest.currency)}
                               </p>
@@ -467,51 +514,146 @@ export default function Chat() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/20 p-4">
           <form
             onSubmit={handleRequestPayment}
-            className="w-full max-w-sm rounded-lg border border-border bg-card p-5 shadow-xl"
+            className="w-full max-w-md rounded-lg border border-border bg-card p-5 shadow-xl"
           >
             <p className="font-mono text-sm font-bold">$ paiement --demande</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Envoyez un bouton de paiement dans le chat à{" "}
+              Choisissez le produit négocié, puis appliquez la réduction. Client :{" "}
               <span className="font-semibold text-foreground">
                 {conversation.other?.name ?? "votre client"}
               </span>.
             </p>
             <div className="mt-4 space-y-3">
               <div className="space-y-1.5">
-                <Label className="text-[10px] uppercase text-muted-foreground">
-                  Montant ({DEFAULT_CURRENCY})
-                </Label>
-                <Input
-                  type="number"
-                  min={1}
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="1500"
-                  className="font-mono"
-                  autoFocus
-                  required
-                />
+                <Label className="text-[10px] uppercase text-muted-foreground">Produit</Label>
+                {supplierProducts === undefined ? (
+                  <div className="text-[11px] text-muted-foreground">Chargement des produits…</div>
+                ) : supplierProducts.length > 0 ? (
+                  <Select value={selectedProductId} onValueChange={setSelectedProductId}>
+                    <SelectTrigger className="h-8 font-mono text-xs">
+                      <SelectValue placeholder="Choisir un produit" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {supplierProducts.map((p) => (
+                        <SelectItem key={p._id} value={p._id} className="font-mono text-xs">
+                          {p.name} — {formatMoney(p.price, p.currency)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <p className="rounded border border-amber-600/30 bg-amber-600/[0.06] px-3 py-2 text-[11px] text-amber-700">
+                    Aucun produit actif — ajoutez d'abord un produit dans « Mes produits ».
+                  </p>
+                )}
               </div>
+
+              {selectedProduct && (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase text-muted-foreground">Quantité</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={qty}
+                        onChange={(e) => setQty(e.target.value)}
+                        className="font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase text-muted-foreground">
+                        Réduction (%)
+                      </Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        max={MAX_DISCOUNT_PCT}
+                        value={discount}
+                        onChange={(e) => setDiscount(e.target.value)}
+                        className="font-mono"
+                        placeholder="Ex : 10"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded border border-primary/30 bg-primary/[0.05] px-3 py-2">
+                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                      <span>Prix unitaire ({selectedProduct.unit})</span>
+                      <span className="font-mono">
+                        {formatMoney(selectedProduct.price, selectedProduct.currency)}
+                        {discountPct > 0 && unitPriceAfter !== null && (
+                          <span className="text-destructive">
+                            {" "}
+                            → {formatMoney(unitPriceAfter, selectedProduct.currency)}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between">
+                      <span className="text-[11px] text-muted-foreground">
+                        {qtyNum} × {formatMoney(unitPriceAfter ?? selectedProduct.price, selectedProduct.currency)}
+                      </span>
+                      <span className="font-mono text-base font-bold text-primary">
+                        {formatMoney(computedTotal ?? 0, selectedProduct.currency)}
+                      </span>
+                    </div>
+                    {selectedProduct.stock < qtyNum && (
+                      <p className="mt-1 text-[10px] text-destructive">
+                        ⚠ Stock insuffisant ({selectedProduct.stock} restant).
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {!selectedProduct && (
+                <div className="space-y-1.5">
+                  <Label className="text-[10px] uppercase text-muted-foreground">
+                    Montant ({DEFAULT_CURRENCY})
+                  </Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="1500"
+                    className="font-mono"
+                    autoFocus
+                    required
+                  />
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 <Label className="text-[10px] uppercase text-muted-foreground">Note</Label>
                 <Textarea
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder={`Ex : 500 unités × 45 ${DEFAULT_CURRENCY}`}
+                  placeholder="Ex : réduction fidélité, livraison incluse…"
                   rows={2}
                   className="font-mono text-xs"
                 />
               </div>
+
               <p className="rounded border border-primary/30 bg-primary/[0.05] px-3 py-2 text-[10px] text-muted-foreground">
-                Le client recevra un bouton « Payer » dans le chat. La commande sera créée
-                automatiquement au paiement.
+                Le client recevra un bouton « Payer » dans le chat. La commande sera créée au
+                paiement avec le produit et la quantité choisis.
               </p>
               <div className="flex gap-2">
-                <Button type="button" variant="outline" className="flex-1" onClick={() => setPayReqOpen(false)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setPayReqOpen(false)}
+                >
                   Annuler
                 </Button>
-                <Button type="submit" className="flex-1" disabled={!amount || Number(amount) <= 0}>
+                <Button type="submit" className="flex-1" disabled={finalAmount <= 0}>
                   Envoyer
+                  {selectedProduct && computedTotal !== null
+                    ? ` ${formatMoney(computedTotal, selectedProduct.currency)}`
+                    : ""}
                 </Button>
               </div>
             </div>
