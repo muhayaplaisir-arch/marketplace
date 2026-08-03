@@ -312,6 +312,35 @@ export default function SupplierOverview() {
         ) : (
           <div className="divide-y divide-border">
             {orders.slice(0, 5).map((o) => (
-
-
-[FILE_TOO_LARGE]: The combined read_files output exceeded the 100 000 character hard limit. This file was truncated after 12 602 characters. Read it separately or use code_search for the relevant section.
+              <div key={o._id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-semibold">
+                    {o.orderNumber} · {o.productName}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {o.clientName} {o.clientCountry ? `· ${o.clientCountry}` : ""} ·{" "}
+                    {formatDate(o.createdAt)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <p className="text-xs font-bold text-primary">{formatMoney(o.total)}</p>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-[9px]",
+                      o.status === "delivered" && "border-emerald-600/30 text-emerald-700",
+                      o.status === "cancelled" && "border-destructive/30 text-destructive",
+                      o.paymentStatus !== "paid" && "border-amber-600/30 text-amber-700",
+                    )}
+                  >
+                    {ORDER_STATUS_LABELS[o.status]}
+                  </Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

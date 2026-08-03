@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
 import {
+  Inbox,
   LayoutDashboard,
   Loader2,
   LogOut,
@@ -24,12 +25,14 @@ const NAV_ITEMS: Record<string, { to: string; label: string; icon: any; end?: bo
     { to: "/dashboard/marketplace", label: "Marché", icon: ShoppingCart, end: true },
     { to: "/dashboard/orders", label: "Mes commandes", icon: Truck },
     { to: "/dashboard/chat", label: "Messages", icon: MessageSquareText },
+    { to: "/dashboard/messages", label: "Tous les messages", icon: Inbox },
   ],
   supplier: [
     { to: "/dashboard/supplier", label: "Tableau de bord", icon: LayoutDashboard, end: true },
     { to: "/dashboard/supplier/products", label: "Mes produits", icon: Package },
     { to: "/dashboard/supplier/orders", label: "Commandes", icon: Truck },
     { to: "/dashboard/chat", label: "Messages", icon: MessageSquareText },
+    { to: "/dashboard/messages", label: "Tous les messages", icon: Inbox },
   ],
   admin: [
     { to: "/dashboard/admin", label: "Vue d'ensemble", icon: LayoutDashboard, end: true },
@@ -46,6 +49,7 @@ export default function DashboardLayout() {
     api.admin.listSuppliers,
     user?.role === "admin" ? { status: "pending" } : "skip",
   );
+  const unread = useQuery(api.chat.getUnreadSummary, user?.role ? {} : "skip");
   const unreadPulse = user?.role === "admin" && (pendingSuppliers?.length ?? 0) > 0;
 
   if (isLoading) {
@@ -67,6 +71,8 @@ export default function DashboardLayout() {
     await signOut();
     navigate("/");
   };
+
+  const unreadTotal = unread?.total ?? 0;
 
   return (
     <div className="min-h-screen bg-background">
@@ -120,6 +126,11 @@ export default function DashboardLayout() {
                 {item.label === "Fournisseurs" && unreadPulse && (
                   <Badge className="ml-auto h-5 min-w-5 rounded-full px-1.5 text-[9px] bg-amber-600 text-white">
                     {pendingSuppliers?.length}
+                  </Badge>
+                )}
+                {item.label === "Messages" && unreadTotal > 0 && (
+                  <Badge className="ml-auto h-5 min-w-5 rounded-full px-1.5 text-[9px] bg-destructive text-white">
+                    {unreadTotal > 99 ? "99+" : unreadTotal}
                   </Badge>
                 )}
               </NavLink>
@@ -185,6 +196,9 @@ export default function DashboardLayout() {
                 }
               >
                 {item.label}
+                {item.label === "Messages" && unreadTotal > 0 && (
+                  <span className="ml-1.5 inline-block h-2 w-2 rounded-full bg-destructive" />
+                )}
               </NavLink>
             ))}
           </div>

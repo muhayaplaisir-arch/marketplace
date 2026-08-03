@@ -41,10 +41,12 @@ export default function Chat() {
     api.chat.listMessages,
     conversationId ? { conversationId: conversationId as any } : "skip",
   );
+  const unread = useQuery(api.chat.getUnreadSummary);
   const sendMessage = useMutation(api.chat.sendMessage);
   const requestPayment = useMutation(api.chat.requestPayment);
   const payPaymentRequest = useMutation(api.chat.payPaymentRequest);
   const generateUploadUrl = useMutation(api.chat.generateUploadUrl);
+  const markConversationRead = useMutation(api.chat.markConversationRead);
 
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -58,6 +60,16 @@ export default function Chat() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isSupplier = user?.role === ROLES.SUPPLIER;
+
+  // Mark the opened conversation as read once its messages are loaded
+  // (and again whenever a new incoming message arrives while viewing).
+  useEffect(() => {
+    if (!conversationId || messages === undefined) return;
+    const count = unread?.perConversation[conversationId] ?? 0;
+    if (count > 0) {
+      markConversationRead({ conversationId: conversationId as any });
+    }
+  }, [conversationId, messages, unread, markConversationRead]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -163,33 +175,48 @@ export default function Chat() {
               </p>
             </div>
           ) : (
-            conversations.map((c) => (
-              <button
-                key={c._id}
-                onClick={() => navigate(`/dashboard/chat/${c._id}`)}
-                className={cn(
-                  "w-full border-b border-border/60 px-4 py-3 text-left transition-colors hover:bg-muted/40",
-                  conversationId === c._id && "bg-primary/[0.06]",
-                )}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="truncate text-xs font-semibold">
-                    {c.other?.company || c.other?.name || "Partenaire"}
-                  </p>
-                  {c.lastMessageAt && (
-                    <span className="shrink-0 text-[9px] text-muted-foreground">
-                      {timeAgo(c.lastMessageAt)}
-                    </span>
+            conversations.map((c) => {
+              const unreadCount = unread?.perConversation[c._id] ?? 0;
+              return (
+                <button
+                  key={c._id}
+                  onClick={() => navigate(`/dashboard/chat/${c._id}`)}
+                  className={cn(
+                    "w-full border-b border-border/60 px-4 py-3 text-left transition-colors hover:bg-muted/40",
+                    conversationId === c._id && "bg-primary/[0.06]",
                   )}
-                </div>
-                <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
-                  {c.lastMessage || "Nouvelle conversation"}
-                </p>
-                {c.productName && (
-                  <p className="mt-1 text-[10px] text-primary">📦 {c.productName}</p>
-                )}
-              </button>
-            ))
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className={cn("truncate text-xs", unreadCount > 0 ? "font-bold" : "font-semibold")}>
+                      {c.other?.company || c.other?.name || "Partenaire"}
+                    </p>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {unreadCount > 0 && (
+                        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-white">
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      )}
+                      {c.lastMessageAt && (
+                        <span className="text-[9px] text-muted-foreground">
+                          {timeAgo(c.lastMessageAt)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <p
+                    className={cn(
+                      "mt-0.5 truncate text-[11px]",
+                      unreadCount > 0 ? "font-semibold text-foreground" : "text-muted-foreground",
+                    )}
+                  >
+                    {c.lastMessage || "Nouvelle conversation"}
+                  </p>
+                  {c.productName && (
+                    <p className="mt-1 text-[10px] text-primary">📦 {c.productName}</p>
+                  )}
+                </button>
+              );
+            })
           )}
         </div>
       </div>
