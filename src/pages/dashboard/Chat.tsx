@@ -238,16 +238,16 @@ export default function Chat() {
         ) : (
           <>
             {/* header */}
-            <div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-2.5">
-              <div className="flex items-center gap-2.5">
-                <span className="flex h-8 w-8 items-center justify-center rounded border border-primary/30 bg-primary/[0.07] text-primary">
+            <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-4 py-2.5">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-primary/30 bg-primary/[0.07] text-primary">
                   <Store className="h-4 w-4" />
                 </span>
-                <div>
-                  <p className="text-xs font-bold">
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-bold">
                     {conversation.other?.company || conversation.other?.name || "Partenaire"}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="truncate text-[10px] text-muted-foreground">
                     {conversation.other ? ROLE_LABELS[conversation.other.role ?? ""] ?? "" : ""}
                     {conversation.other?.country ? ` · ${conversation.other.country}` : ""}
                     {conversation.productName ? ` · 📦 ${conversation.productName}` : ""}
@@ -255,7 +255,11 @@ export default function Chat() {
                 </div>
               </div>
               {isSupplier && (
-                <Button size="sm" className="gap-1.5 text-[11px] h-8" onClick={() => setPayReqOpen(true)}>
+                <Button
+                  size="sm"
+                  className="h-8 shrink-0 gap-1.5 text-[11px]"
+                  onClick={() => setPayReqOpen(true)}
+                >
                   <CreditCard className="h-3.5 w-3.5" /> Demander un paiement
                 </Button>
               )}
@@ -284,39 +288,56 @@ export default function Chat() {
                             : "border-border bg-card",
                         )}
                       >
-                        {m.type === "payment" && m.paymentRequest ? (
-                          <div className="w-60">
-                            <p className="flex items-center gap-1.5 font-semibold text-amber-700">
-                              <CreditCard className="h-3.5 w-3.5" /> Demande de paiement
-                            </p>
-                            <p className="mt-1.5 text-xl font-bold text-primary">
-                              {formatMoney(m.paymentRequest.amount, m.paymentRequest.currency)}
-                            </p>
-                            {m.paymentRequest.note && (
-                              <p className="mt-1 text-[11px] text-muted-foreground">
-                                {m.paymentRequest.note}
+                        {m.type === "payment" ? (
+                          m.paymentRequest ? (
+                            <div className="w-60">
+                              <p className="flex items-center gap-1.5 font-semibold text-amber-700">
+                                <CreditCard className="h-3.5 w-3.5" /> Demande de paiement
                               </p>
-                            )}
-                            <p className="mt-1 text-[10px] text-muted-foreground">
-                              {formatDate(m.paymentRequest.createdAt)}
-                            </p>
-                            {m.paymentRequest.status === "paid" ? (
-                              <p className="mt-2 flex items-center gap-1.5 rounded border border-primary/30 bg-primary/[0.06] px-2 py-1.5 text-[11px] text-primary">
-                                <CheckCircle2 className="h-3.5 w-3.5" /> Payée
+                              <p className="mt-1.5 text-xl font-bold text-primary">
+                                {formatMoney(m.paymentRequest.amount, m.paymentRequest.currency)}
                               </p>
-                            ) : mine ? (
+                              {m.paymentRequest.note && (
+                                <p className="mt-1 text-[11px] text-muted-foreground">
+                                  {m.paymentRequest.note}
+                                </p>
+                              )}
+                              <p className="mt-1 text-[10px] text-muted-foreground">
+                                {formatDate(m.paymentRequest.createdAt)}
+                              </p>
+                              {m.paymentRequest.status === "paid" ? (
+                                <p className="mt-2 flex items-center gap-1.5 rounded border border-primary/30 bg-primary/[0.06] px-2 py-1.5 text-[11px] text-primary">
+                                  <CheckCircle2 className="h-3.5 w-3.5" /> Payée
+                                </p>
+                              ) : mine ? (
+                                <p className="mt-2 rounded border border-amber-600/30 bg-amber-600/[0.06] px-2 py-1.5 text-[11px] text-amber-700">
+                                  En attente du client…
+                                </p>
+                              ) : (
+                                <Button
+                                  className="mt-2 w-full h-8 text-[11px]"
+                                  onClick={() => setPayingPr(m.paymentRequest)}
+                                >
+                                  Payer {formatMoney(m.paymentRequest.amount, m.paymentRequest.currency)}
+                                </Button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="w-60">
+                              <p className="flex items-center gap-1.5 font-semibold text-amber-700">
+                                <CreditCard className="h-3.5 w-3.5" /> Demande de paiement
+                              </p>
+                              {m.content && (
+                                <p className="mt-1 text-[11px] text-muted-foreground">{m.content}</p>
+                              )}
+                              <p className="mt-1 text-[10px] text-muted-foreground">
+                                {formatDate(m.createdAt)}
+                              </p>
                               <p className="mt-2 rounded border border-amber-600/30 bg-amber-600/[0.06] px-2 py-1.5 text-[11px] text-amber-700">
-                                En attente du client…
+                                Détails indisponibles — demandez une nouvelle demande.
                               </p>
-                            ) : (
-                              <Button
-                                className="mt-2 w-full h-8 text-[11px]"
-                                onClick={() => setPayingPr(m.paymentRequest)}
-                              >
-                                Payer {formatMoney(m.paymentRequest.amount, m.paymentRequest.currency)}
-                              </Button>
-                            )}
-                          </div>
+                            </div>
+                          )
                         ) : m.type === "order" ? (
                           <div className="w-64">
                             <p className="flex items-center gap-1.5 font-semibold">
@@ -370,6 +391,17 @@ export default function Chat() {
 
             {/* composer */}
             <form onSubmit={handleSend} className="border-t border-border p-3 bg-card">
+              {isSupplier && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mb-2 h-8 w-full gap-1.5 border-primary/40 text-[11px] text-primary transition-colors hover:bg-primary/[0.06]"
+                  onClick={() => setPayReqOpen(true)}
+                >
+                  <CreditCard className="h-3.5 w-3.5" /> Demander un paiement
+                </Button>
+              )}
               {imagePreview && (
                 <div className="mb-2 flex items-center gap-2">
                   <span className="relative">
